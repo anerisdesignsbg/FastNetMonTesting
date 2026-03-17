@@ -1,0 +1,40 @@
+name: Sync Markdown to Divi 5
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/*.md' # Only runs when files in the /docs folder change
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Pandoc
+        run: sudo apt-get install -y pandoc
+
+      - name: Convert and Push to WordPress
+        run: |
+          # 1. Convert Markdown to HTML (Github-flavored)
+          # Replace 'docs/content.md' with your filename
+          pandoc docs/content.md -f gfm -t html -o content.html
+
+          # 2. Extract the HTML into a variable
+          HTML_CONTENT=$(cat content.html)
+
+          # 3. Create a JSON payload
+          # We escape the HTML to ensure it doesn't break the JSON string
+          PAYLOAD=$(jq -n --arg content "$HTML_CONTENT" '{content: $content}')
+
+          # 4. Push to WordPress REST API
+          curl -X POST "${{ secrets.WP_URL }}/wp-json/wp/v2/posts/${{ secrets.WP_POST_ID }}" \
+            -u "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+        env:
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_POST_ID: ${{ secrets.WP_POST_ID }}
